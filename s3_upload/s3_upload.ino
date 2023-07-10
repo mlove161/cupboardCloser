@@ -28,15 +28,12 @@ const int bufferSize = 1024 * 23; // 23552 bytes
 WiFiClientSecure net = WiFiClientSecure();
 MQTTClient client = MQTTClient(bufferSize);
 
-void messageHandler(String &topic, String &payload) {
-  Serial.println("incoming: " + topic + " - " + payload);
+void messageHandler(String &topic, String &message) {
+  Serial.println("incoming: " + topic + " - " + message);
 
  StaticJsonDocument<200> doc;
- deserializeJson(doc, payload);
- const char* message = doc["message"];
-
-  if do
-
+ deserializeJson(doc, message);
+ const char* payload = doc["payload"];
 
 }
 
@@ -72,23 +69,37 @@ void connectAWS()
   Serial.println("AWS IoT Connected!");
 }
 
-void publishMessage(String buf)
+unsigned long getTime() {
+  time_t now;
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    //Serial.println("Failed to obtain time");
+    return(0);
+  }
+  time(&now);
+  return now;
+}
+
+
+void publishMessage(String type, String payload)
 {
-  StaticJsonDocument<200> doc;
-  // doc["time"] = millis();
-  doc["sensor_a0"] = analogRead(0);
-  doc["data"] = buf;
-  char jsonBuffer[512];
-  serializeJson(doc, jsonBuffer); // print to client
 
-  client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer);
+  // formating json
+  DynamicJsonDocument doc(20000);
+  doc["type"] = type;
+  doc["payload"] = payload;
+
+  String jsonBuffer;
   Serial.println("Publishing to " + String(AWS_IOT_PUBLISH_TOPIC));
-}
+  serializeJson(doc, jsonBuffer);
 
-String converter(uint8_t *str){
-    return String((char *)str);
-}
+  // publishing topic 
+  if (!client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer)) {
+    lwMQTTErr(client.lastError());
+  }
+  Serial.println("Published");
 
+}
 
 
 void connectWifi() {
@@ -180,7 +191,7 @@ void cameraSetup() {
 
 
 
-void takePic() {
+void takePicAndPublish() {
 
   // Take Picture with Camera
   Serial.println("Taking picture");
@@ -191,7 +202,7 @@ void takePic() {
     return;
   }
 
-    const char *data = (const char *)fb->buf;
+  const char *data = (const char *)fb->buf;
   // Image metadata.  Yes it should be cleaned up to use printf if the function is available
   Serial.print("Size of image:");
   Serial.println(fb->len);
@@ -204,23 +215,10 @@ void takePic() {
   Serial.println("data:");
   Serial.println(encoded);
 
-  // formating json
-  DynamicJsonDocument doc(10000);
-  doc["picture"] = String(encoded);
-  String jsonBuffer;
-  
-  serializeJson(doc, jsonBuffer);
-
-  // publishing topic 
-  if (!client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer)) {
-    lwMQTTErr(client.lastError());
-  }
-  Serial.println("Published");
+  publishMessage("IMAGE", encoded);
 
     // Killing cam resource
   esp_camera_fb_return(fb);
-
-
 
 }
 
@@ -243,8 +241,6 @@ void setup() {
   Serial.setDebugOutput(true);
   Serial.println();
 
-
-
   connectWifi();
 
   connectAWS();
@@ -254,20 +250,11 @@ void setup() {
 
 for (int i = 0; i<5; i++)
 {
-  takePic();
+  takePicAndPublish();
   delay(2000);
 }
 
 
-  
-
-  // publishMessage(converter(fb->buf));
-  
-  // // Turns off the ESP32-CAM white on-board LED (flash) connected to GPIO 4
-  // pinMode(4, OUTPUT);
-  // digitalWrite(4, LOW);
-  // rtc_gpio_hold_en(GPIO_NUM_4);
-  
   // delay(2000);
   // Serial.println("Going to sleep now");
   // delay(2000);
@@ -281,11 +268,8 @@ for (int i = 0; i<5; i++)
 
 
 void loop(){
-    // delay(10000);
-    // publishMessage();
     client.loop();
     delay(1000);
 
 }
-
 
