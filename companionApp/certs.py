@@ -1,7 +1,7 @@
 endpoint = "a3fn6zbxkxmi7t-ats.iot.us-east-1.amazonaws.com"
-cert_filepath = "/Users/maddielove/certs/device.pem.crt"
-ca_filepath = "/Users/maddielove/certs/AmazonRootCA1.pem"
-key_filepath = "/Users/maddielove/certs/private.pem.key"
+cert_filepath = "./certs/device.pem.crt"
+ca_filepath = "./certs/AmazonRootCA1.pem"
+key_filepath = "./certs/private.pem.key"
 
 
 
