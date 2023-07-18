@@ -23,7 +23,7 @@ const int bufferSize = 1024 * 23; // 23552 bytes
 
 // The MQTT topics that this device should publish/subscribe
 #define AWS_IOT_PUBLISH_TOPIC   "esp32/pub"
-#define AWS_IOT_SUBSCRIBE_TOPIC "esp32"
+#define AWS_IOT_SUBSCRIBE_TOPIC "esp32/receive"
 
 WiFiClientSecure net = WiFiClientSecure();
 MQTTClient client = MQTTClient(bufferSize);

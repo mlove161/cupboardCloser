@@ -1,26 +1,19 @@
-from enum import Enum
-from PyQt6.QtCore import Qt, QObject
 from PyQt6.QtGui import QPixmap, QIcon, QPalette, QColor, QFont
 from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QLabel, QTabWidget, \
     QGridLayout, QStackedWidget, QGraphicsDropShadowEffect, QMenu, QHBoxLayout, QLineEdit
-from PySide6.QtCore import QObject,Signal
 
 import base64
 from PyQt6.QtWidgets import *
-from PyQt6.QtCore import Qt, QObject
-import sys
+from PyQt6.QtCore import Qt
 import json
 from PyQt6.QtGui import QPixmap, QIcon
 from PySide6.QtCore import Signal, QObject
-from PIL import Image
-import certs
-
 
 from awscrt import mqtt
 from awsiot import mqtt_connection_builder
+
 from uuid import uuid4
 import numpy as np
-from sklearn import svm
 import cv2
 import skops.io as sio
 
@@ -40,9 +33,9 @@ SUBHEADER_FONT = QFont("Helvetica", 24)
 
 
 # TODO: design complete topics
-topic = "test/lambda"
-
-
+image_receive_topic = "test/lambda"
+esp32_pub_topic = "esp32/receive"
+topics = [image_receive_topic, esp32_pub_topic]
 
 
 
@@ -62,10 +55,16 @@ NO_MOTION = "No motion Detected"
 HAND = "Hand Detected"
 NO_HAND = "No hand Detected"
 
+IMAGE_HAND = ['0']
+IMAGE_NO_HAND = ['1']
+
+reset_timer = {"device": "companionApp", "type": "RESET_TIME", "payload": "--"}
+close_command = {"device": "companionApp", "type": "CLOSE", "payload": "--"}
 
 
-# clf name: location to the classifier to load, should be a file in AWS I guess?
-# img: array of pixels that represents an image (hopefully feeding in the pixel array should work)
+#
+# # clf name: location to the classifier to load, should be a file in AWS I guess?
+# # img: array of pixels that represents an image (hopefully feeding in the pixel array should work)
 def ClassifyImage(clfName, img):
     #load model
     clf = sio.load(clfName, trusted=True)
@@ -97,6 +96,12 @@ def ClassifyImage(clfName, img):
 
 class DeviceSignals(QObject):
     name_change = Signal(str)
+    hand_detected = Signal()
+    no_hand_detected = Signal()
+    close_command_issued = Signal()
+    cabinet_open = Signal()
+    motion_detected = Signal()
+    no_motion_detected = Signal()
 
 
 class Device:
@@ -119,8 +124,8 @@ class DeviceWidget(QWidget):
     def __init__(self, parent, page_name, index):
         super().__init__(parent)
         #AHGHHHH
-        # self.device = Device(page_name, self)
-        self.device = None
+        self.device = Device(page_name, self)
+        # self.device = None
         self.index = index
         item_layout = QVBoxLayout()
 
@@ -136,8 +141,8 @@ class DeviceWidget(QWidget):
         self.cabinet_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         item_layout.addWidget(self.cabinet_label)
-        # device_label = QLabel(str(self.device.name))
-        device_label = QLabel(str("self.device.name"))
+        device_label = QLabel(str(self.device.name))
+        # device_label = QLabel(str("self.device.name"))
         self.device.signals.name_change.connect(device_label.setText)
         device_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         item_layout.addWidget(device_label)
@@ -167,6 +172,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.device_screen = None
+        self.setStyleSheet("background-color: #FFFFFF;")
         self.setWindowTitle("Cupboard Closer")
         self.resize(500, 600)
         self.current_screen = None
@@ -280,18 +286,48 @@ class MainWindow(QMainWindow):
     def on_message_received(self, topic, payload):
         event = json.loads(payload)
         print("Message received. Payload: '{}".format(event))
-        img_data = event["payload"]
-        decode_img = base64.b64decode(img_data)
-        filename = "test_image.jpeg"
-        with open(filename, 'wb') as f:
-            f.write(decode_img)
-        ClassifyImage("model7-NN-CabPeople-acc90.skops", "test_image.jpeg")
+
+        if event["type"] == "IMAGE":
+            print("Image received.")
+            img_data = event["payload"]
+            decode_img = base64.b64decode(img_data)
+            filename = "test_image.jpeg"
+            with open(filename, 'wb') as f:
+                f.write(decode_img)
+            result = ClassifyImage("model7-NN-CabPeople-acc90.skops", "test_image.jpeg")
+            if result == IMAGE_HAND:
+                print("Success! Hand Found. Restarting timer.")
+                if self.device_screen is not None:
+                    self.device_screen.device.signals.hand_detected.emit()
+                ## TODO: broadcast signal to change UI
+                reset_timer_json = json.dumps(reset_timer)
+                self.MQTT_connection.publish(topic=esp32_pub_topic,
+                                             payload =reset_timer_json,
+                                             qos = mqtt.QoS.AT_LEAST_ONCE)
+            elif result == IMAGE_NO_HAND:
+                if self.device_screen is not None:
+                   self.device_screen.device.signals.no_hand_detected.emit()
+
+                ## TODO: broadcast signal to change UI
+                print("No hand detected.")
+
+        if event["type"] == "CABINET_OPEN":
+            print("Cabinet Open")
+            self.device_screen.device.signals.cabinet_open.emit()
+
+
+        if event["type"] == "MOTION_DETECTED":
+            print("Motion Detected")
+            self.device_screen.device.signals.motion_detected.emit()
+        if event["type"] == "NO_MOTION_DETECTED":
+            print("No motion detected")
+            self.device_screen.device.signals.no_motion_detected.emit()
 
     def create_MQTT_connection(self):
         # Necessary for an MQTT Connection:
         # topic to subscribe to
         # Endpoint (server address), key, cert, ca filepaths
-        MQTT_connection = mqtt_connection_builder.mtls_from_path(
+        self.MQTT_connection = mqtt_connection_builder.mtls_from_path(
             endpoint=certs.endpoint,
             port=8883,
             cert_filepath=certs.cert_filepath,
@@ -300,14 +336,17 @@ class MainWindow(QMainWindow):
             client_id="test-" + str(uuid4())
         )
         # Create connection, wait until connection established
-        connection = MQTT_connection.connect()
+        connection = self.MQTT_connection.connect()
         connection.result()
         print("Connected!")
+
         ## TODO: device setup screen
         ## TODO: sub to multiple topics? for each device?
+
+        topic = "esp32/pub"
         print("Subscribing to topic '{}'...".format(topic))
         # QOS protocol, will publish messages until the PUBACK signal is sent back
-        subscribe_future, packet_id = MQTT_connection.subscribe(
+        subscribe_future, packet_id = self.MQTT_connection.subscribe(
             topic=topic,
             qos=mqtt.QoS.AT_LEAST_ONCE,
             callback=self.on_message_received)
@@ -318,6 +357,8 @@ class MainWindow(QMainWindow):
 class DeviceScreen(QWidget):
     def __init__(self, parent, device):
         super().__init__(parent)
+        self.device = device
+        self.parent = parent
 
         layout = QVBoxLayout()
         # layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -359,8 +400,10 @@ class DeviceScreen(QWidget):
         buttons_layout.addWidget(settings_button)
         buttons_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Device Name/Label
+        ## Device Name/Label
         self.label = QLabel(device.name)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.label.setFont(SUBHEADER_FONT)
         device.signals.name_change.connect(self.label.setText)
 
         # Cabinet Button Layout
@@ -375,51 +418,76 @@ class DeviceScreen(QWidget):
         container.setLayout(cabinet_layout)
 
         # Add Cabinet Widget to screen
-        whole_layout = QVBoxLayout()
-        whole_layout.addWidget(container)
-        whole_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.whole_layout = QVBoxLayout()
+        self.whole_layout.addWidget(container)
+        self.whole_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Add Motion/Hand Detectors to screen
-        hand_detected_label = QLabel()
-        hand_detected_icon = QPixmap('./res/hand_detected.png')
-        hand_detected_label.setPixmap(hand_detected_icon)
+        self.hand_label = QLabel()
+        self.hand_detected_icon = QPixmap('./res/hand_detected.png')
+        self.no_hand_detected_icon = QPixmap('./res/no_hand_detected.png')
+        self.hand_label.setPixmap(self.no_hand_detected_icon)
+        device.signals.hand_detected.connect(lambda: self.change_hand_icon(self.hand_detected_icon))
+        device.signals.no_hand_detected.connect(lambda: self.change_hand_icon(self.no_hand_detected_icon))
 
-        no_hand_detected_label = QLabel()
-        no_hand_detected_icon = QPixmap('./res/no_hand_detected.png')
-        no_hand_detected_label.setPixmap(no_hand_detected_icon)
+        self.motion_label = QLabel()
+        self.motion_detected_icon = QPixmap('./res/motion_detected.png')
+        self.no_motion_detected_icon = QPixmap('./res/no_motion_detected.png')
+        self.motion_label.setPixmap(self.no_motion_detected_icon)
+        device.signals.motion_detected.connect(lambda: self.change_motion_icon(self.motion_detected_icon))
+        device.signals.no_motion_detected.connect(lambda: self.change_motion_icon(self.no_motion_detected_icon))
 
-        motion_detected_label = QLabel()
-        motion_detected_icon = QPixmap('./res/motion_detected.png')
-        motion_detected_label.setPixmap(motion_detected_icon)
-
-        no_motion_detected_label = QLabel()
-        no_motion_detected_icon = QPixmap('./res/no_motion_detected.png')
-        no_motion_detected_label.setPixmap(no_motion_detected_icon)
 
         status_layout = QHBoxLayout()
         status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        status_layout.addWidget()
-
-        if device.motion_status == NO_MOTION:
-            status_layout.addWidget(no_motion_detected_label)
-        else:
-            status_layout.addWidget(motion_detected_label)
-
+        status_layout.addWidget(self.motion_label)
         status_layout.addSpacing(120)
+        status_layout.addWidget(self.hand_label)
 
-        if device.hand_status == NO_HAND:
-            status_layout.addWidget(no_hand_detected_label)
-        else:
-            status_layout.addWidget(hand_detected_label)
+        self.whole_layout.addLayout(status_layout)
 
-        whole_layout.addLayout(status_layout)
+        # Close Button
+        self.close_button = QLabel()
+        self.close_icon_inactive = QPixmap('./res/close_inactive')
+        self.close_icon_active = QPixmap('./res/close_active.png')
+        self.close_button.setPixmap(self.close_icon_inactive)
+        self.close_button.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.close_button.mousePressEvent = None
 
-        layout.addLayout(whole_layout)
+        device.signals.cabinet_open.connect(lambda: self.activate_close_button())
+
+        self.whole_layout.addWidget(self.close_button)
+
+
+
+
+        layout.addLayout(self.whole_layout)
 
         self.setLayout(layout)
 
+    def change_hand_icon(self, hand_icon: QLabel):
+        self.hand_label.setPixmap(hand_icon)
 
-## TODO: implement troubleshooting layout, for now its just developer settings
+    def change_motion_icon(self, motion_icon: QLabel):
+        self.motion_label.setPixmap(motion_icon)
+
+
+    def activate_close_button(self):
+        self.close_button.setPixmap(self.close_icon_active)
+        self.close_button.mousePressEvent = lambda event: self.close_button_pressed()
+
+    def close_button_pressed(self):
+        print("close button pressed")
+        close_command_json = json.dumps(close_command)
+        self.parent.MQTT_connection.publish(topic=esp32_pub_topic,
+                                     payload=close_command_json,
+                                     qos=mqtt.QoS.AT_LEAST_ONCE)
+
+        self.close_button.setPixmap(self.close_icon_inactive)
+        self.device.signals.close_command_issued.emit()
+
+
+## TODO: implemxent troubleshooting layout, for now its just developer settings
 class SettingsScreen(QWidget):
     def __init__(self, parent, device):
         super().__init__(parent)

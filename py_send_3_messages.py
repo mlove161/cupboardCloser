@@ -62,7 +62,7 @@ if __name__ == '__main__':
         #JSON.dumps cleans up message
         message_json = json.dumps(message)
         pub_message = MQTT_connection.publish(
-            topic=topic,
+            topic="testtopic",
             payload=message_json,
             qos=mqtt.QoS.AT_LEAST_ONCE
         )
