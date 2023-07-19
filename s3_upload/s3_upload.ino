@@ -13,10 +13,10 @@
 
 #include "camera_pins.h"
 
-#define HAND_DETECTED 3
-#define CLOSE_CUPBOARD 4
-#define TIMEOUT_CHANGE 5
-#define DOOR_OPEN 6
+#define HAND_DETECTED 12
+#define CLOSE_CUPBOARD 13
+#define TIMEOUT_CHANGE 15
+#define DOOR_OPEN 14
 
 // const char* ssid = "Fios-P8F8p";
 // const char* password = "need23haw3898wax";
@@ -42,11 +42,14 @@ void messageHandler(String &topic, String &message) {
  Serial.print(payload);
 
  if (doc["type"] == "IMAGE" and doc["payload"] == "1") {
+   Serial.print("HAND DETECTED! ");
    digitalWrite(HAND_DETECTED, HIGH);
  }
 
  if (doc["type"] == "TIMEOUT_CHANGE") {
    if (doc["payload"] == "60s") {
+     String test = doc["payload"];
+     Serial.print("payload = " + test);
      digitalWrite(TIMEOUT_CHANGE, HIGH);
    }
    else {
@@ -58,7 +61,7 @@ void messageHandler(String &topic, String &message) {
    digitalWrite(CLOSE_CUPBOARD, HIGH);
  }
 
- 
+
   
  
 
@@ -278,8 +281,7 @@ void setup() {
 
   connectAWS();
 
-  cameraSetup();
-  Serial.println("HERE WE MADE IT HERE");
+  // cameraSetup();
   
   pinMode(HAND_DETECTED, OUTPUT);
   pinMode(CLOSE_CUPBOARD, OUTPUT);
@@ -290,13 +292,13 @@ void setup() {
   Serial.println("BEFORE THE LOOP");
 
 
-  for (int i = 0; i<5; i++)
-  {
-    Serial.println("IN THE LOOP");
+  // for (int i = 0; i<5; i++)
+  // {
+  //   Serial.println("IN THE LOOP");
 
-    takePicAndPublish();
-    delay(2000);
-  }
+  //   takePicAndPublish();
+  //   delay(2000);
+  // }
 
 
   // delay(2000);
@@ -314,6 +316,10 @@ void setup() {
 void loop(){
     client.loop();
     delay(1000);
+
+
+
+
 
 }
 
