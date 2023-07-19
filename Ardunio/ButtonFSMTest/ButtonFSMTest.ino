@@ -2,7 +2,7 @@
 
 // constants won't change. They're used here to set pin numbers:
 const int YellowbuttonPin = 2;  // the number of the pushbutton pin
-const int BlackbuttonPin = 5;
+const int BlackbuttonPin = 3;
 const int BluebuttonPin = 4;
 
 const int BlueledPin = 12;    // the number of the LED pin

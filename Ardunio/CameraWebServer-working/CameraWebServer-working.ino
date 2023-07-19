@@ -21,7 +21,7 @@
 //#define CAMERA_MODEL_M5STACK_WIDE // Has PSRAM
 //#define CAMERA_MODEL_M5STACK_ESP32CAM // No PSRAM
 //#define CAMERA_MODEL_M5STACK_UNITCAM // No PSRAM
-#define CAMERA_MODEL_AI_THINKER // Has PSRAM
+#define CAMERA_MODEL_AI_THINKER 
 //#define CAMERA_MODEL_TTGO_T_JOURNAL // No PSRAM
 //#define CAMERA_MODEL_XIAO_ESP32S3 // Has PSRAM
 // ** Espressif Internal Boards **
@@ -35,7 +35,7 @@
 // ===========================
 // Enter your WiFi credentials
 // ===========================
-const char* ssid = "Maddie iPhone 12";
+const char* ssid = "Sierra Phone";
 const char* password = "12345678";
 
 void startCameraServer();
@@ -150,7 +150,7 @@ void setup() {
   Serial.print(WiFi.localIP());
   Serial.println("' to connect");
   //turn on flashlight
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_BUILTIN, HIGH);
 }
 
 void loop() {

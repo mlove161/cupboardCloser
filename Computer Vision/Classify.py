@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn import svm
-import cv2
+
 import skops.io as sio
 
 from skimage.transform import resize

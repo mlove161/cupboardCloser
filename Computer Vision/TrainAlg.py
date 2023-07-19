@@ -8,7 +8,7 @@ def TrainAlg():
     #get data
     (X_train, Y_train) = GetData()
 
-    clf = MLPClassifier(solver='lbfgs', alpha=1e-3,hidden_layer_sizes=(15, 5), random_state=1, max_iter=10000000000)
+    clf = MLPClassifier(solver='lbfgs', alpha=1e-3,hidden_layer_sizes=(15, 5), random_state=1) #, max_iter=10000000000
     #svm.SVC(kernel='rbf', degree=3)
     Y_train= Y_train[:,1:]
     (x,y) = Y_train.shape 

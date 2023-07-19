@@ -1,13 +1,11 @@
 import numpy as np
-from sklearn import svm
-import cv2
 import skops.io as sio
-
 from skimage.transform import resize
 from skimage.feature import hog
 
-Hmodel =   240#480 120
-Wmodel =  320#640 160
+
+#Hmodel =   240#480 120
+#Wmodel =  320#640 160
 
 Hmodel =   120
 Wmodel =   160
@@ -23,7 +21,7 @@ def ClassifyImage(clfName, img):
     clf = sio.load(clfName, trusted=True)
 
     #read image (if given an image file)
-    #img = imread(image)
+    img = imread(image)
 
     # pre proccessing
     resized_img = resize(img, (Hmodel, Wmodel))
@@ -42,5 +40,5 @@ def ClassifyImage(clfName, img):
     #get probability (never figured out how to do it out)
     #probs = clf.predict_proba(fd)
 
-    print(guess)
+    #print(guess)
     return guess
