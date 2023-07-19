@@ -13,6 +13,11 @@
 
 #include "camera_pins.h"
 
+#define HAND_DETECTED 3
+#define CLOSE_CUPBOARD 4
+#define TIMEOUT_CHANGE 5
+#define DOOR_OPEN 6
+
 // const char* ssid = "Fios-P8F8p";
 // const char* password = "need23haw3898wax";
 const char* password = "12345678";
@@ -34,6 +39,29 @@ void messageHandler(String &topic, String &message) {
  StaticJsonDocument<200> doc;
  deserializeJson(doc, message);
  const char* payload = doc["payload"];
+ Serial.print(payload);
+
+ if (doc["type"] == "IMAGE" and doc["payload"] == "1") {
+   digitalWrite(HAND_DETECTED, HIGH);
+ }
+
+ if (doc["type"] == "TIMEOUT_CHANGE") {
+   if (doc["payload"] == "60s") {
+     digitalWrite(TIMEOUT_CHANGE, HIGH);
+   }
+   else {
+     digitalWrite(TIMEOUT_CHANGE, LOW);
+   }
+ }
+
+ if (doc["type"] == "CLOSE_CUPBOARD") {
+   digitalWrite(CLOSE_CUPBOARD, HIGH);
+ }
+
+ 
+  
+ 
+
 
 }
 
@@ -171,6 +199,8 @@ void cameraSetup() {
       return;
     }
 
+    Serial.print("made it");
+
     sensor_t * s = esp_camera_sensor_get();
     // initial sensors are flipped vertically and colors are a bit saturated
     if (s->id.PID == OV3660_PID) {
@@ -185,6 +215,9 @@ void cameraSetup() {
     s->set_vflip(s, 1);
     s->set_hmirror(s, 1);
   #endif
+
+  Serial.print("made it");
+
 
   
 }
@@ -246,13 +279,24 @@ void setup() {
   connectAWS();
 
   cameraSetup();
+  Serial.println("HERE WE MADE IT HERE");
+  
+  pinMode(HAND_DETECTED, OUTPUT);
+  pinMode(CLOSE_CUPBOARD, OUTPUT);
+  pinMode(TIMEOUT_CHANGE, OUTPUT);
+
+  pinMode(DOOR_OPEN, INPUT);
+
+  Serial.println("BEFORE THE LOOP");
 
 
-for (int i = 0; i<5; i++)
-{
-  takePicAndPublish();
-  delay(2000);
-}
+  for (int i = 0; i<5; i++)
+  {
+    Serial.println("IN THE LOOP");
+
+    takePicAndPublish();
+    delay(2000);
+  }
 
 
   // delay(2000);
