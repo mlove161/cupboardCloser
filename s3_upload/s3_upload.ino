@@ -41,10 +41,17 @@ void messageHandler(String &topic, String &message) {
  const char* payload = doc["payload"];
  Serial.print(payload);
 
- if (doc["type"] == "IMAGE" and doc["payload"] == "1") {
-   Serial.print("HAND DETECTED! ");
-   digitalWrite(HAND_DETECTED, HIGH);
+ if (doc["type"] == "HAND_DETECTED") {
+   if (doc["payload"] == "TRUE") {
+    Serial.print("HAND DETECTED! ");
+    digitalWrite(HAND_DETECTED, HIGH);
+   }
+   else if (doc["payload" == "FALSE"]) {
+     Serial.print("HAND NOT DETECTED");
+     digitalWrite(HAND_DETECTED, LOW);
+   }
  }
+ 
 
  if (doc["type"] == "TIMEOUT_CHANGE") {
    if (doc["payload"] == "60s") {
@@ -281,7 +288,7 @@ void setup() {
 
   connectAWS();
 
-  // cameraSetup();
+  cameraSetup();
   
   pinMode(HAND_DETECTED, OUTPUT);
   pinMode(CLOSE_CUPBOARD, OUTPUT);
@@ -291,32 +298,24 @@ void setup() {
 
   Serial.println("BEFORE THE LOOP");
 
-
-  // for (int i = 0; i<5; i++)
-  // {
-  //   Serial.println("IN THE LOOP");
-
-  //   takePicAndPublish();
-  //   delay(2000);
-  // }
-
-
-  // delay(2000);
-  // Serial.println("Going to sleep now");
-  // delay(2000);
-  // esp_deep_sleep_start();
-  // Serial.println("This will never be printed");
-
-
-
-
 }
 
 
 void loop(){
-    client.loop();
-    delay(1000);
+  client.loop();
+  delay(1000);
 
+
+  Serial.println("Entering Loop");
+
+  // if cupboard open, start taking pictures
+  if (digitalRead(DOOR_OPEN) == LOW) 
+  {
+    digitalWrite(TIMEOUT_CHANGE, HIGH);
+    takePicAndPublish();
+  }
+
+  delay(2000);
 
 
 
