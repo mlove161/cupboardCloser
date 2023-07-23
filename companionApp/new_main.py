@@ -1,10 +1,11 @@
+from PyQt6 import QtCore
 from PyQt6.QtGui import QPixmap, QIcon, QPalette, QColor, QFont
 from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QLabel, QTabWidget, \
     QGridLayout, QStackedWidget, QGraphicsDropShadowEffect, QMenu, QHBoxLayout, QLineEdit
 
 import base64
 from PyQt6.QtWidgets import *
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QMetaObject, QByteArray
 import json
 from PyQt6.QtGui import QPixmap, QIcon
 from PySide6.QtCore import Signal, QObject
@@ -20,8 +21,6 @@ import skops.io as sio
 from skimage.transform import resize
 from skimage.feature import hog
 
-
-
 import sys
 import certs
 
@@ -30,24 +29,19 @@ DEVICE_LABEL = "My Devices"
 HEADER_FONT = QFont("Helvetica", 30, 700)
 SUBHEADER_FONT = QFont("Helvetica", 24)
 
-
-
 # TODO: design complete topics
 image_receive_topic = "test/lambda"
 esp32_pub_topic = "esp32/receive"
 topics = [image_receive_topic, esp32_pub_topic]
 
+Hmodel = 240  # 480 120
+Wmodel = 320  # 640 160
 
-
-Hmodel =   240#480 120
-Wmodel =  320#640 160
-
-Hmodel =   120
-Wmodel =   160
+Hmodel = 120
+Wmodel = 160
 
 Him = 480
 Wim = 640
-
 
 MOTION = "Motion Detected"
 NO_MOTION = "No motion Detected"
@@ -58,7 +52,8 @@ NO_HAND = "No hand Detected"
 IMAGE_HAND = ['0']
 IMAGE_NO_HAND = ['1']
 
-reset_timer = {"device": "companionApp", "type": "RESET_TIME", "payload": "--"}
+hand_detected = {"device": "companionApp", "type": "HAND_DETECTED", "payload": "TRUE"}
+hand_not_detected = {"device": "companionApp", "type": "HAND_DETECTED", "payload": "FALSE"}
 close_command = {"device": "companionApp", "type": "CLOSE", "payload": "--"}
 
 
@@ -66,32 +61,31 @@ close_command = {"device": "companionApp", "type": "CLOSE", "payload": "--"}
 # # clf name: location to the classifier to load, should be a file in AWS I guess?
 # # img: array of pixels that represents an image (hopefully feeding in the pixel array should work)
 def ClassifyImage(clfName, img):
-    #load model
+    # load model
     clf = sio.load(clfName, trusted=True)
 
-    #read image (if given an image file)
+    # read image (if given an image file)
     img = cv2.imread(img)
 
     # pre proccessing
     resized_img = resize(img, (Hmodel, Wmodel))
     fd, hog_image = hog(resized_img,
-                    orientations=9,
-                    pixels_per_cell=(8, 8),
-                    cells_per_block=(2, 2),
-                    visualize=True,
-                    channel_axis = -1)
+                        orientations=9,
+                        pixels_per_cell=(8, 8),
+                        cells_per_block=(2, 2),
+                        visualize=True,
+                        channel_axis=-1)
     (x,) = fd.shape
     fd = np.reshape(fd, (1, x))
 
-    #predict if hand or not
-    guess = clf.predict(fd) # if this fails it is probably bc HW of model is wrong
+    # predict if hand or not
+    guess = clf.predict(fd)  # if this fails it is probably bc HW of model is wrong
 
-    #get probability (never figured out how to do it out)
-    #probs = clf.predict_proba(fd)
+    # get probability (never figured out how to do it out)
+    # probs = clf.predict_proba(fd)
 
     print(guess)
     return guess
-
 
 
 class DeviceSignals(QObject):
@@ -102,6 +96,7 @@ class DeviceSignals(QObject):
     cabinet_open = Signal()
     motion_detected = Signal()
     no_motion_detected = Signal()
+    image_received = Signal(str)
 
 
 class Device:
@@ -118,12 +113,10 @@ class Device:
         self.signals.name_change.emit(name)
 
 
-
-
 class DeviceWidget(QWidget):
     def __init__(self, parent, page_name, index):
         super().__init__(parent)
-        #AHGHHHH
+        # AHGHHHH
         self.device = Device(page_name, self)
         # self.device = None
         self.index = index
@@ -292,6 +285,8 @@ class MainWindow(QMainWindow):
             img_data = event["payload"]
             decode_img = base64.b64decode(img_data)
             filename = "test_image.jpeg"
+            if self.device_screen is not None:
+                self.device_screen.device.signals.image_received.emit(img_data)
             with open(filename, 'wb') as f:
                 f.write(decode_img)
             result = ClassifyImage("model7-NN-CabPeople-acc90.skops", "test_image.jpeg")
@@ -300,13 +295,17 @@ class MainWindow(QMainWindow):
                 if self.device_screen is not None:
                     self.device_screen.device.signals.hand_detected.emit()
                 ## TODO: broadcast signal to change UI
-                reset_timer_json = json.dumps(reset_timer)
+                hand_detected_json = json.dumps(hand_detected)
                 self.MQTT_connection.publish(topic=esp32_pub_topic,
-                                             payload =reset_timer_json,
-                                             qos = mqtt.QoS.AT_LEAST_ONCE)
+                                             payload=hand_detected_json,
+                                             qos=mqtt.QoS.AT_LEAST_ONCE)
             elif result == IMAGE_NO_HAND:
                 if self.device_screen is not None:
-                   self.device_screen.device.signals.no_hand_detected.emit()
+                    self.device_screen.device.signals.no_hand_detected.emit()
+                hand_not_detected_json = json.dumps(hand_not_detected)
+                self.MQTT_connection.publish(topic=esp32_pub_topic,
+                                             payload=hand_not_detected,
+                                             qos=mqtt.QoS.AT_LEAST_ONCE)
 
                 ## TODO: broadcast signal to change UI
                 print("No hand detected.")
@@ -314,8 +313,6 @@ class MainWindow(QMainWindow):
         if event["type"] == "CABINET_OPEN":
             print("Cabinet Open")
             self.device_screen.device.signals.cabinet_open.emit()
-
-
         if event["type"] == "MOTION_DETECTED":
             print("Motion Detected")
             self.device_screen.device.signals.motion_detected.emit()
@@ -437,7 +434,6 @@ class DeviceScreen(QWidget):
         device.signals.motion_detected.connect(lambda: self.change_motion_icon(self.motion_detected_icon))
         device.signals.no_motion_detected.connect(lambda: self.change_motion_icon(self.no_motion_detected_icon))
 
-
         status_layout = QHBoxLayout()
         status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         status_layout.addWidget(self.motion_label)
@@ -458,19 +454,30 @@ class DeviceScreen(QWidget):
 
         self.whole_layout.addWidget(self.close_button)
 
+        ## Receive Images and display in new window
+        self.image_display = QLabel()
+        self.img_window = QWidget()
+        self.img_layout = QVBoxLayout()
+        self.img_display = QLabel()
+        self.img_layout.addWidget(self.img_display)
+        self.img_window.setLayout(self.img_layout)
 
+        def set_image(img: str):
+            decode_img = base64.b64decode(img)
+            pixmap = QPixmap()
+            pixmap.loadFromData(decode_img)
+            self.img_display.setPixmap(pixmap)
+            self.img_window.show()
 
+        device.signals.image_received.connect(set_image)
 
-        layout.addLayout(self.whole_layout)
-
-        self.setLayout(layout)
+        self.setLayout(self.whole_layout)
 
     def change_hand_icon(self, hand_icon: QLabel):
         self.hand_label.setPixmap(hand_icon)
 
     def change_motion_icon(self, motion_icon: QLabel):
         self.motion_label.setPixmap(motion_icon)
-
 
     def activate_close_button(self):
         self.close_button.setPixmap(self.close_icon_active)
@@ -480,8 +487,8 @@ class DeviceScreen(QWidget):
         print("close button pressed")
         close_command_json = json.dumps(close_command)
         self.parent.MQTT_connection.publish(topic=esp32_pub_topic,
-                                     payload=close_command_json,
-                                     qos=mqtt.QoS.AT_LEAST_ONCE)
+                                            payload=close_command_json,
+                                            qos=mqtt.QoS.AT_LEAST_ONCE)
 
         self.close_button.setPixmap(self.close_icon_inactive)
         self.device.signals.close_command_issued.emit()
@@ -562,6 +569,7 @@ class AddItem(QWidget):
         whole_layout.addWidget(self.container)
         self.setLayout(whole_layout)
         self.mouseReleaseEvent = parent.add_device
+
 
 def main():
     app = QApplication(sys.argv)
