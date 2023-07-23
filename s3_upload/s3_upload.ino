@@ -18,6 +18,10 @@
 #define TIMEOUT_CHANGE 15
 #define DOOR_OPEN 14
 
+#define WAIT_STATE 1
+#define PUBLISH_PICS_STATE 2
+#define HAND_DETECTED_STATE 3
+
 // const char* ssid = "Fios-P8F8p";
 // const char* password = "need23haw3898wax";
 const char* password = "12345678";
@@ -33,6 +37,8 @@ const int bufferSize = 1024 * 23; // 23552 bytes
 WiFiClientSecure net = WiFiClientSecure();
 MQTTClient client = MQTTClient(bufferSize);
 
+int state = WAIT_STATE;
+
 void messageHandler(String &topic, String &message) {
   Serial.println("incoming: " + topic + " - " + message);
 
@@ -44,11 +50,11 @@ void messageHandler(String &topic, String &message) {
  if (doc["type"] == "HAND_DETECTED") {
    if (doc["payload"] == "TRUE") {
     Serial.print("HAND DETECTED! ");
-    digitalWrite(HAND_DETECTED, HIGH);
+    state = HAND_DETECTED_STATE;
    }
    else if (doc["payload" == "FALSE"]) {
      Serial.print("HAND NOT DETECTED");
-     digitalWrite(HAND_DETECTED, LOW);
+    //  digitalWrite(HAND_DETECTED, LOW);
    }
  }
  
@@ -67,12 +73,6 @@ void messageHandler(String &topic, String &message) {
  if (doc["type"] == "CLOSE_CUPBOARD") {
    digitalWrite(CLOSE_CUPBOARD, HIGH);
  }
-
-
-  
- 
-
-
 }
 
 
@@ -107,7 +107,8 @@ void connectAWS()
   Serial.println("AWS IoT Connected!");
 }
 
-unsigned long getTime() {
+unsigned long getTime() 
+{
   time_t now;
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
@@ -117,7 +118,6 @@ unsigned long getTime() {
   time(&now);
   return now;
 }
-
 
 void publishMessage(String type, String payload)
 {
@@ -139,8 +139,8 @@ void publishMessage(String type, String payload)
 
 }
 
-
-void connectWifi() {
+void connectWifi() 
+{
 // ** if using access pt, comment this out
 
   WiFi.begin(ssid, password);
@@ -158,7 +158,8 @@ void connectWifi() {
   // WiFi.softAP(ssid, password);
 }
 
-void cameraSetup() {
+void cameraSetup() 
+{
   // Serial.begin(115200);
   // Serial.setDebugOutput(true);
   // Serial.println();
@@ -258,7 +259,9 @@ void takePicAndPublish() {
   Serial.println("data:");
   Serial.println(encoded);
 
-  publishMessage("IMAGE", encoded);
+  // publishMessage("IMAGE", encoded);
+  publishMessage("test produce img", "test");
+
 
     // Killing cam resource
   esp_camera_fb_return(fb);
@@ -298,24 +301,47 @@ void setup() {
 
   Serial.println("BEFORE THE LOOP");
 
+
+
+
 }
 
 
 void loop(){
   client.loop();
-  delay(1000);
 
-
-  Serial.println("Entering Loop");
-
-  // if cupboard open, start taking pictures
-  if (digitalRead(DOOR_OPEN) == LOW) 
+  if (state == WAIT_STATE)
   {
-    digitalWrite(TIMEOUT_CHANGE, HIGH);
-    takePicAndPublish();
+    Serial.print("in waiting state");
+    int door_open = digitalRead(DOOR_OPEN);
+    if (digitalRead(DOOR_OPEN) == LOW) 
+    {
+      state = PUBLISH_PICS_STATE;
+    }
   }
 
+  else if (state == PUBLISH_PICS_STATE)
+  {
+    Serial.print("in publish pics state");
+    takePicAndPublish();
+    delay(1000);
+  }
+
+  else if (state == HAND_DETECTED_STATE)
+  {
+    Serial.print("in hand detected state, next state = wait state");
+    digitalWrite(HAND_DETECTED, HIGH);
+    state = WAIT_STATE;
+  }
+
+
+
+  // if cupboard open, start taking pictures
+
+
+
   delay(2000);
+  digitalWrite(HAND_DETECTED, LOW)
 
 
 
