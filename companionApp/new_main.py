@@ -498,6 +498,7 @@ class DeviceScreen(QWidget):
 class SettingsScreen(QWidget):
     def __init__(self, parent, device):
         super().__init__(parent)
+        self.parent = parent
         input_device_name = QLineEdit()
         input_device_name.setText(device.name)
         device.signals.name_change.connect(input_device_name.setText)
@@ -516,8 +517,32 @@ class SettingsScreen(QWidget):
         # back_label.setStyleSheet("border-width: 1px; border-style: solid; border-radius: 4px;")
         back_label.setMaximumSize(50, 30)
 
+
+        ## Add temp JSON publishing
+        message_entry = QTextEdit()
+        event = json.dumps(certs.event)
+        message_entry.setText(event)
+        message_send = QPushButton("Send Message")
+        def publish_message(msg):
+            ## Convert from string, to JSON, back to string to publish to AWS
+            msg_json = json.loads(msg)
+            msg_json = json.dumps(msg_json)
+            parent.MQTT_connection.publish(topic=esp32_pub_topic,
+                                     payload=msg_json,
+                                     qos=mqtt.QoS.AT_LEAST_ONCE)
+
+
+        ## TODO: testing, add timeouts / accuracy
+        message_send.clicked.connect(lambda: publish_message(message_entry.toPlainText()))
+        message_layout = QHBoxLayout()
+        message_layout.addWidget(message_entry)
+        message_layout.addWidget(message_send)
+
+
         layout = QVBoxLayout()
         layout.addWidget(back_label)
+
+        layout.addLayout(message_layout)
 
         layout.addLayout(name_layout)
         self.setLayout(layout)
@@ -526,6 +551,7 @@ class SettingsScreen(QWidget):
 class QuestionScreen(QWidget):
     def __init__(self, parent, device):
         super().__init__(parent)
+
         ## Back Button
         back_label = QLabel()
         back_icon = QPixmap('res/back_arrow.png')
@@ -535,11 +561,41 @@ class QuestionScreen(QWidget):
         # back_label.setStyleSheet("border-width: 1px; border-style: solid; border-radius: 4px;")
         back_label.setMaximumSize(50, 30)
 
+        ## Header
+        icon = QLabel()
+        icon.setPixmap(QPixmap('res/question_header.png'))
+        icon.resize(80,80)
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(icon)
+        header = QLabel("Troubleshooting")
+        header.setFont(SUBHEADER_FONT)
+        header_layout.addWidget(header)
+
+
         layout = QVBoxLayout()
         layout.addWidget(back_label)
-        layout.addWidget(QLabel("Troubleshooting"))
+        layout.addLayout(header_layout)
+
+        layout.addWidget(self.add_help_tab())
+
+
+
         self.setLayout(layout)
 
+    def add_help_tab(self, text = "", next_screen = None):
+        container = QWidget()
+
+        help_label = QLabel("test")
+        help_label.setStyleSheet("padding: 5px;")
+        right_arrow = QLabel()
+        right_arrow.setPixmap(QPixmap("res/chevron_right.png"))
+        container_layout = QHBoxLayout()
+        container_layout.addWidget(help_label)
+        container.setStyleSheet("border: 2px solid blue; border-radius: 10px; padding: 0px;")
+
+        container_layout.addWidget(right_arrow)
+        container.setLayout(container_layout)
+        return container
 
 class AddItem(QWidget):
     def __init__(self, parent):
