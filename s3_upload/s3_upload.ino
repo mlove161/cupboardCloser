@@ -18,9 +18,14 @@
 #define TIMEOUT_CHANGE 15
 #define DOOR_OPEN 14
 
+#define message_received 4
+
 #define WAIT_STATE 1
 #define PUBLISH_PICS_STATE 2
 #define HAND_DETECTED_STATE 3
+#define CLOSE_CUPBOARD_STATE 4
+
+#define on_board_LED 33
 
 // const char* ssid = "Fios-P8F8p";
 // const char* password = "need23haw3898wax";
@@ -28,18 +33,22 @@ const char* password = "12345678";
 const char* ssid = "Maddie iPhone 12";
 
 const int bufferSize = 1024 * 23; // 23552 bytes
-
+int door_open_sensor = HIGH;
 
 // The MQTT topics that this device should publish/subscribe
 #define AWS_IOT_PUBLISH_TOPIC   "esp32/pub"
 #define AWS_IOT_SUBSCRIBE_TOPIC "esp32/receive"
 
+
 WiFiClientSecure net = WiFiClientSecure();
 MQTTClient client = MQTTClient(bufferSize);
 
 int state = WAIT_STATE;
+int next_state = WAIT_STATE;
 
 void messageHandler(String &topic, String &message) {
+  pinMode(message_received, OUTPUT);
+
   Serial.println("incoming: " + topic + " - " + message);
 
  StaticJsonDocument<200> doc;
@@ -47,31 +56,47 @@ void messageHandler(String &topic, String &message) {
  const char* payload = doc["payload"];
  Serial.print(payload);
 
- if (doc["type"] == "HAND_DETECTED") {
+  // Only act on hand messages if we're actively taking pictures.
+ if (doc["type"] == "HAND_DETECTED" and state == PUBLISH_PICS_STATE) {
    if (doc["payload"] == "TRUE") {
-    Serial.print("HAND DETECTED! ");
-    state = HAND_DETECTED_STATE;
+    Serial.print("HAND DETECTED! Next state is setting pins.");
+    next_state = HAND_DETECTED_STATE;
    }
    else if (doc["payload" == "FALSE"]) {
      Serial.print("HAND NOT DETECTED");
-    //  digitalWrite(HAND_DETECTED, LOW);
    }
  }
  
 
+
  if (doc["type"] == "TIMEOUT_CHANGE") {
-   if (doc["payload"] == "60s") {
+   if (state != WAIT_STATE) {
+     publishMessage("DEBUG", "Unable to set timeout, cupboard not in wait state.");
+   }
+   else if (doc["payload"] == "60s") {
      String test = doc["payload"];
      Serial.print("payload = " + test);
      digitalWrite(TIMEOUT_CHANGE, HIGH);
    }
-   else {
+   else if (doc["payload"] == "30s") {
+     String test = doc["payload"];
+     Serial.print("payload = " + test);
      digitalWrite(TIMEOUT_CHANGE, LOW);
    }
  }
 
  if (doc["type"] == "CLOSE_CUPBOARD") {
-   digitalWrite(CLOSE_CUPBOARD, HIGH);
+   next_state = CLOSE_CUPBOARD_STATE;
+  //  digitalWrite(CLOSE_CUPBOARD, HIGH);
+ }
+
+ if (doc["type"] == "TESTING") {
+   if (doc["payload"] == "DOOR_OPEN_LOW") {
+    door_open_sensor = LOW;
+   }
+   else if (doc["payload"] == "DOOR_OPEN_HIGH") {
+     door_open_sensor = HIGH;
+   }
  }
 }
 
@@ -146,13 +171,22 @@ void connectWifi()
   WiFi.begin(ssid, password);
   WiFi.setSleep(false);
 
+  int count = 0;
+  int delay_time = 500;
+
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+    delay(delay_time);
     Serial.print(".");
+    count += delay_time;
+    if (count == 5000) {
+      Serial.print("Unable to connect to WiFi. Restarting. ");
+      ESP.restart();
+      // reset after 5 seconds
+    }
   }
-  Serial.println("");
+
   Serial.println("WiFi connected");
-  // *** end comment
+
 
   // ** access pt only
   // WiFi.softAP(ssid, password);
@@ -198,10 +232,10 @@ void cameraSetup()
     config.fb_count = 1;
   }
 
-  #if defined(CAMERA_MODEL_ESP_EYE)
-    pinMode(13, INPUT_PULLUP);
-    pinMode(14, INPUT_PULLUP);
-  #endif
+  // #if defined(CAMERA_MODEL_ESP_EYE)
+  //   pinMode(13, INPUT_PULLUP);
+  //   pinMode(14, INPUT_PULLUP);
+  // #endif
 
     // camera init
     esp_err_t err = esp_camera_init(&config);
@@ -210,7 +244,6 @@ void cameraSetup()
       return;
     }
 
-    Serial.print("made it");
 
     sensor_t * s = esp_camera_sensor_get();
     // initial sensors are flipped vertically and colors are a bit saturated
@@ -227,7 +260,6 @@ void cameraSetup()
     s->set_hmirror(s, 1);
   #endif
 
-  Serial.print("made it");
 
 
   
@@ -236,6 +268,7 @@ void cameraSetup()
 
 
 void takePicAndPublish() {
+  digitalWrite(4, HIGH);
 
   // Take Picture with Camera
   Serial.println("Taking picture");
@@ -243,6 +276,7 @@ void takePicAndPublish() {
   fb = esp_camera_fb_get();  
   if(!fb) {
     Serial.println("Camera capture failed");
+    ESP.restart();
     return;
   }
 
@@ -287,18 +321,23 @@ void setup() {
   Serial.setDebugOutput(true);
   Serial.println();
 
+  pinMode(HAND_DETECTED, OUTPUT);
+  pinMode(CLOSE_CUPBOARD, OUTPUT);
+  pinMode(TIMEOUT_CHANGE, OUTPUT);
+  pinMode(DOOR_OPEN, INPUT);
+  pinMode(on_board_LED, OUTPUT);
+
+
   connectWifi();
 
   connectAWS();
 
   cameraSetup();
   
-  pinMode(HAND_DETECTED, OUTPUT);
-  pinMode(CLOSE_CUPBOARD, OUTPUT);
-  pinMode(TIMEOUT_CHANGE, OUTPUT);
 
-  pinMode(DOOR_OPEN, INPUT);
 
+ // TESTING
+  
   Serial.println("BEFORE THE LOOP");
 
 
@@ -309,39 +348,58 @@ void setup() {
 
 void loop(){
   client.loop();
+  state = next_state;
+  digitalWrite(HAND_DETECTED, LOW);
+
 
   if (state == WAIT_STATE)
   {
-    Serial.print("in waiting state");
-    int door_open = digitalRead(DOOR_OPEN);
-    if (digitalRead(DOOR_OPEN) == LOW) 
+    digitalWrite(CLOSE_CUPBOARD, LOW);
+    digitalWrite(4, LOW);
+
+
+    Serial.println("in waiting state");
+    // int door_open_sensor = digitalRead(DOOR_OPEN);
+    Serial.println("door = ");
+    Serial.print(door_open_sensor);
+    if (door_open_sensor == LOW) 
     {
-      state = PUBLISH_PICS_STATE;
+      next_state = PUBLISH_PICS_STATE;
     }
   }
 
   else if (state == PUBLISH_PICS_STATE)
   {
     Serial.print("in publish pics state");
+    digitalWrite(HAND_DETECTED, LOW);
+    digitalWrite(4, HIGH);
     takePicAndPublish();
-    delay(1000);
+    delay(500);
+    digitalWrite(4, LOW);
+    // int door_open_sensor = digitalRead(DOOR_OPEN);
+    if (door_open_sensor == HIGH) {
+      next_state = WAIT_STATE;
+    }
   }
 
   else if (state == HAND_DETECTED_STATE)
   {
-    Serial.print("in hand detected state, next state = wait state");
+    Serial.print("in hand detected state, next state = take pics state");
     digitalWrite(HAND_DETECTED, HIGH);
-    state = WAIT_STATE;
+    delay(500);
+    next_state = PUBLISH_PICS_STATE;
+  }
+  else if (state == CLOSE_CUPBOARD_STATE) 
+  {
+    Serial.print("Closing cupboard, next state = wait state");
+    digitalWrite(CLOSE_CUPBOARD, HIGH);
+    next_state = WAIT_STATE;
+    delay(5000);
+    
   }
 
-
-
-  // if cupboard open, start taking pictures
-
-
-
   delay(2000);
-  digitalWrite(HAND_DETECTED, LOW)
+
 
 
 
