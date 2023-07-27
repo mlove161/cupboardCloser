@@ -54,7 +54,7 @@ IMAGE_NO_HAND = ['1']
 
 hand_detected = {"device": "companionApp", "type": "HAND_DETECTED", "payload": "TRUE"}
 hand_not_detected = {"device": "companionApp", "type": "HAND_DETECTED", "payload": "FALSE"}
-close_command = {"device": "companionApp", "type": "CLOSE", "payload": "--"}
+close_command = {"device": "companionApp", "type": "CLOSE_CUPBOARD", "payload": "--"}
 
 
 #
@@ -97,6 +97,7 @@ class DeviceSignals(QObject):
     motion_detected = Signal()
     no_motion_detected = Signal()
     image_received = Signal(str)
+    door_open = Signal()
 
 
 class Device:
@@ -206,7 +207,7 @@ class MainWindow(QMainWindow):
         self.home_layout.addLayout(self.grid_layout)
 
         ## Add button
-        self.add_item_widget = AddItem(self)
+        self.add_item_widget = AddItem(self, self.add_device)
 
         self.main_widget = QWidget()
         self.main_widget.setLayout(self.home_layout)
@@ -310,8 +311,8 @@ class MainWindow(QMainWindow):
                 ## TODO: broadcast signal to change UI
                 print("No hand detected.")
 
-        if event["type"] == "CABINET_OPEN":
-            print("Cabinet Open")
+        if event["type"] == "DOOR_OPEN":
+            print("Cabinet door open")
             self.device_screen.device.signals.cabinet_open.emit()
         if event["type"] == "MOTION_DETECTED":
             print("Motion Detected")
@@ -538,6 +539,17 @@ class SettingsScreen(QWidget):
         message_layout.addWidget(message_entry)
         message_layout.addWidget(message_send)
 
+        ## Timeout changes
+        timeout = QComboBox()
+        timeout_choices = ["30s", "60s"]
+        for choice in timeout_choices:
+            timeout.addItem(choice)
+
+        timeout.currentIndexChanged.connect(lambda: publish_message(timeout.currentText()))
+        timeout_label = QLabel("Set Timeout")
+        timeout_layout = QVBoxLayout()
+        timeout_layout.addWidget(timeout)
+        timeout_layout.addWidget(timeout_label)
 
         layout = QVBoxLayout()
         layout.addWidget(back_label)
@@ -545,6 +557,7 @@ class SettingsScreen(QWidget):
         layout.addLayout(message_layout)
 
         layout.addLayout(name_layout)
+        layout.addLayout(timeout_layout)
         self.setLayout(layout)
 
 
@@ -598,7 +611,7 @@ class QuestionScreen(QWidget):
         return container
 
 class AddItem(QWidget):
-    def __init__(self, parent):
+    def __init__(self, parent, on_release):
         super().__init__(parent)
 
         item_layout = QVBoxLayout()
@@ -624,7 +637,20 @@ class AddItem(QWidget):
         whole_layout = QVBoxLayout()
         whole_layout.addWidget(self.container)
         self.setLayout(whole_layout)
-        self.mouseReleaseEvent = parent.add_device
+        self.mouseReleaseEvent = on_release
+
+
+class CheckListScreen(QWidget):
+    def __init__(self):
+        self.checklists = []
+        ## Add button
+        self.add_item_widget = AddItem(self, self.add_list)
+
+        # self.add_button =
+
+    def add_list(self):
+        new_list = []
+        self.checklists.append(new_list)
 
 
 def main():
