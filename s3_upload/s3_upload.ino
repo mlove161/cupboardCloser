@@ -18,8 +18,7 @@
 #define TIMEOUT_CHANGE 15
 #define DOOR_OPEN 14
 
-#define message_received 4
-
+#define FLASH_LED 4
 #define WAIT_STATE 1
 #define PUBLISH_PICS_STATE 2
 #define HAND_DETECTED_STATE 3
@@ -50,7 +49,6 @@ int state = WAIT_STATE;
 int next_state = WAIT_STATE;
 
 void messageHandler(String &topic, String &message) {
-  pinMode(message_received, OUTPUT);
 
   Serial.println("incoming: " + topic + " - " + message);
 
@@ -90,17 +88,17 @@ void messageHandler(String &topic, String &message) {
 
  if (doc["type"] == "CLOSE_CUPBOARD") {
    next_state = CLOSE_CUPBOARD_STATE;
-  //  digitalWrite(CLOSE_CUPBOARD, HIGH);
+   digitalWrite(CLOSE_CUPBOARD, HIGH);
  }
 
- if (doc["type"] == "TESTING") {
-   if (doc["payload"] == "DOOR_OPEN_LOW") {
-    door_open_sensor = LOW;
-   }
-   else if (doc["payload"] == "DOOR_OPEN_HIGH") {
-     door_open_sensor = HIGH;
-   }
- }
+//  if (doc["type"] == "TESTING") {
+//    if (doc["payload"] == "DOOR_OPEN_LOW") {
+//     door_open_sensor = LOW;
+//    }
+//    else if (doc["payload"] == "DOOR_OPEN_HIGH") {
+//      door_open_sensor = HIGH;
+//    }
+//  }
 }
 
 
@@ -120,7 +118,7 @@ void connectAWS()
   Serial.print("Connecting to AWS IOT");
 
   while (!client.connect(THINGNAME)) {
-    Serial.print(".A");
+    Serial.print(".AWS");
     delay(100);
   }
 
@@ -352,17 +350,25 @@ void setup() {
 void loop(){
   client.loop();
   state = next_state;
-  digitalWrite(HAND_DETECTED, LOW);
+  digitalWrite(HAND_DETECTED, HIGH);
+  int door_open_sensor = digitalRead(DOOR_OPEN);
 
+  if (door_open_sensor == LOW)
+  {
+    digitalWrite(16, LOW);
+  }
+  else if (door_open_sensor == HIGH) {
+    digitalWrite(16, HIGH);
+  }
 
   if (state == WAIT_STATE)
   {
     digitalWrite(CLOSE_CUPBOARD, LOW);
-    digitalWrite(4, LOW);
+    digitalWrite(FLASH_LED, LOW);
 
 
     Serial.println("in waiting state");
-    // int door_open_sensor = digitalRead(DOOR_OPEN);
+    int door_open_sensor = digitalRead(DOOR_OPEN);
     Serial.println("door = ");
     Serial.print(door_open_sensor);
     if (door_open_sensor == LOW) 
@@ -374,21 +380,17 @@ void loop(){
   else if (state == PUBLISH_PICS_STATE)
   {
     Serial.print("in publish pics state");
-    digitalWrite(HAND_DETECTED, LOW);
-    digitalWrite(4, HIGH);
+    digitalWrite(HAND_DETECTED, HIGH );
+    digitalWrite(FLASH_LED, HIGH);
     takePicAndPublish();
-    delay(500);
-    digitalWrite(4, LOW);
-    // int door_open_sensor = digitalRead(DOOR_OPEN);
-    if (door_open_sensor == HIGH) {
-      next_state = WAIT_STATE;
-    }
+    int door_open_sensor = digitalRead(DOOR_OPEN);
   }
 
   else if (state == HAND_DETECTED_STATE)
   {
+    
     Serial.print("in hand detected state, next state = take pics state");
-    digitalWrite(HAND_DETECTED, HIGH);
+    digitalWrite(HAND_DETECTED, LOW);
     delay(500);
     next_state = PUBLISH_PICS_STATE;
   }
@@ -396,14 +398,14 @@ void loop(){
   {
     Serial.print("Closing cupboard, next state = wait state");
     digitalWrite(CLOSE_CUPBOARD, HIGH);
-    next_state = WAIT_STATE;
-    delay(5000);
+    digitalWrite(FLASH_LED, LOW);
+    delay(500);
     
   }
 
-  delay(2000);
-
-
+  if (digitalRead(DOOR_OPEN) == CLOSE) {
+    next_state = WAIT_STATE;
+  }
 
 
 
