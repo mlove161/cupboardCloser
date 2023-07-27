@@ -27,6 +27,9 @@
 
 #define on_board_LED 33
 
+#define CLOSE 1
+#define OPEN 0
+
 // const char* ssid = "Fios-P8F8p";
 // const char* password = "need23haw3898wax";
 const char* password = "12345678";
@@ -293,8 +296,8 @@ void takePicAndPublish() {
   Serial.println("data:");
   Serial.println(encoded);
 
-  // publishMessage("IMAGE", encoded);
-  publishMessage("test produce img", "test");
+  publishMessage("IMAGE", encoded);
+  // publishMessage("test produce img", "test");
 
 
     // Killing cam resource
