@@ -361,6 +361,9 @@ void loop(){
     digitalWrite(16, HIGH);
   }
 
+
+  // TODO: MOTION IMAGES, MOTION PIN HIGH/LOW
+
   if (state == WAIT_STATE)
   {
     digitalWrite(CLOSE_CUPBOARD, LOW);
@@ -374,6 +377,7 @@ void loop(){
     if (door_open_sensor == LOW) 
     {
       next_state = PUBLISH_PICS_STATE;
+      publishMessage("DOOR_OPEN", "-");
     }
   }
 
@@ -400,7 +404,7 @@ void loop(){
     digitalWrite(CLOSE_CUPBOARD, HIGH);
     digitalWrite(FLASH_LED, LOW);
     delay(500);
-    
+    publishMessage("DOOR_CLOSED", "");
   }
 
   if (digitalRead(DOOR_OPEN) == CLOSE) {

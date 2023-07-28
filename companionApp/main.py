@@ -94,6 +94,7 @@ class DeviceSignals(QObject):
     no_hand_detected = Signal()
     close_command_issued = Signal()
     cabinet_open = Signal()
+    cabinet_closed = Signal()
     motion_detected = Signal()
     no_motion_detected = Signal()
     image_received = Signal(str)
@@ -310,6 +311,9 @@ class MainWindow(QMainWindow):
                 ## TODO: broadcast signal to change UI
                 print("No hand detected.")
 
+        if event["type"] == "DOOR_CLOSED":
+            print("Cabinet door closed")
+            self.device_screen.device.signals.cabinet_closed.emit()
         if event["type"] == "DOOR_OPEN":
             print("Cabinet door open")
             self.device_screen.device.signals.cabinet_open.emit()
@@ -452,7 +456,7 @@ class DeviceScreen(QWidget):
         self.close_button.mousePressEvent = None
 
         device.signals.cabinet_open.connect(lambda: self.activate_close_button())
-
+        device.signals.cabinet_closed.connect(lambda: self.deactivate_close_button())
         self.whole_layout.addWidget(self.close_button)
 
         ## Receive Images and display in new window
@@ -483,6 +487,10 @@ class DeviceScreen(QWidget):
     def activate_close_button(self):
         self.close_button.setPixmap(self.close_icon_active)
         self.close_button.mousePressEvent = lambda event: self.close_button_pressed()
+
+    def deactivate_close_button(self):
+        self.close_button.setPixmap(self.close_icon_inactive)
+        self.close_button.mousePressEvent = lambda event: None
 
     def close_button_pressed(self):
         print("close button pressed")
