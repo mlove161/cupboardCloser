@@ -269,7 +269,7 @@ void cameraSetup()
 
 
 void takePicAndPublish() {
-  digitalWrite(4, HIGH);
+  digitalWrite(FLASH_LED, HIGH);
 
   // Take Picture with Camera
   Serial.println("Taking picture");
@@ -326,7 +326,7 @@ void setup() {
   pinMode(CLOSE_CUPBOARD, OUTPUT);
   pinMode(TIMEOUT_CHANGE, OUTPUT);
   pinMode(DOOR_OPEN, INPUT);
-  pinMode(on_board_LED, OUTPUT);
+  pinMode(FLASH_LED, OUTPUT);
 
 
   connectWifi();
