@@ -45,6 +45,10 @@ int door_open_sensor = HIGH;
 WiFiClientSecure net = WiFiClientSecure();
 MQTTClient client = MQTTClient(bufferSize);
 
+// NTP server to request epoch time
+const char* ntpServer = "pool.ntp.org";
+
+
 int state = WAIT_STATE;
 int next_state = WAIT_STATE;
 
@@ -85,9 +89,46 @@ void messageHandler(String &topic, String &message) {
      digitalWrite(TIMEOUT_CHANGE, LOW);
    }
  }
+// TESTING
+ long time_total = 0;
+ long time_average = 0;
+ long msg_count = 0;
+// END TESTING
 
  if (doc["type"] == "CLOSE_CUPBOARD") {
    next_state = CLOSE_CUPBOARD_STATE;
+
+  // TESTING
+  // long timestamp = getTime();
+  // char str[14];
+  // str = doc["timestamp"];
+  // char* remaining;
+  // long msg_timestamp;
+  // msg_timestamp = strtol(str, &remaining, msg_timestamp);
+
+  // time_diff = timestamp - msg_timestamp;
+  // char* time;
+  // sprintf(time, "%ld", time_diff);
+
+  // msg_count++;
+  // time_total += time_diff;
+  // time_average = time_total / msg_count;
+  // char str_msg_ct[14]
+  // sprintf(str_msg_ct, "%ld", msg_count);
+  // char time_total_str[14];
+  // sprintf(time_total_str, "%ld", time_total);
+  // char time_average_str[14];
+  // sprintf(time_average_str, "%ld", time_average);
+
+  // Serial.println("Current time: ");
+  // Serial.print(str);
+  // Serial.println("Total Message Count: ");
+  // Serial.print(str_msg_ct);
+  // Serial.println("Running Time Average: ");
+  // Serial.print(time_average_str);
+
+  // END TESTING
+
    digitalWrite(CLOSE_CUPBOARD, HIGH);
  }
 
@@ -131,6 +172,10 @@ void connectAWS()
   client.subscribe(AWS_IOT_SUBSCRIBE_TOPIC);
 
   Serial.println("AWS IoT Connected!");
+
+  // Publish message to confirm
+  publishMessage("DEBUG", "AWS IoT Connected.");
+
 }
 
 unsigned long getTime() 
@@ -138,7 +183,7 @@ unsigned long getTime()
   time_t now;
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
-    //Serial.println("Failed to obtain time");
+    Serial.println("Failed to obtain time");
     return(0);
   }
   time(&now);
@@ -152,6 +197,11 @@ void publishMessage(String type, String payload)
   DynamicJsonDocument doc(20000);
   doc["type"] = type;
   doc["payload"] = payload;
+  long timestamp = getTime();
+  char str[14];
+  sprintf(str, "%ld", timestamp);
+
+  doc["timestamp"] = str;
 
   String jsonBuffer;
   Serial.println("Publishing to " + String(AWS_IOT_PUBLISH_TOPIC));
@@ -328,6 +378,7 @@ void setup() {
   pinMode(DOOR_OPEN, INPUT);
   pinMode(FLASH_LED, OUTPUT);
 
+  configTime(0, 0, ntpServer);
 
   connectWifi();
 
@@ -387,6 +438,7 @@ void loop(){
     digitalWrite(HAND_DETECTED, HIGH );
     digitalWrite(FLASH_LED, HIGH);
     takePicAndPublish();
+    // delay(1000);
     int door_open_sensor = digitalRead(DOOR_OPEN);
   }
 

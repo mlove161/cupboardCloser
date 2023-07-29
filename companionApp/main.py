@@ -1,3 +1,5 @@
+from time import time
+
 from PyQt6 import QtCore
 from PyQt6.QtGui import QPixmap, QIcon, QPalette, QColor, QFont
 from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QLabel, QTabWidget, \
@@ -54,7 +56,7 @@ IMAGE_NO_HAND = ['1']
 
 hand_detected = {"device": "companionApp", "type": "HAND_DETECTED", "payload": "TRUE"}
 hand_not_detected = {"device": "companionApp", "type": "HAND_DETECTED", "payload": "FALSE"}
-close_command = {"device": "companionApp", "type": "CLOSE_CUPBOARD", "payload": "--"}
+close_command = {"device": "companionApp", "type": "CLOSE_CUPBOARD", "payload": "--", "timestamp": ""}
 
 
 #
@@ -164,6 +166,16 @@ class DeviceWidget(QWidget):
 ## TODO: add mqtt listeners/publishers
 class MainWindow(QMainWindow):
     def __init__(self):
+        #### TESTING
+
+        self.time_total = 0
+        self.time_average = 0
+        self.msg_count = 0
+
+        self.classify_count = 0.0
+        self.classify_sum = 0.0
+        self.classify_avg = 0.0
+        
         super().__init__()
         self.device_screen = None
         self.setStyleSheet("background-color: #FFFFFF;")
@@ -277,20 +289,67 @@ class MainWindow(QMainWindow):
     def create_json_message(self, device_name, type, payload):
         pass
 
+    classify_count = 0.0
+    classify_sum = 0.0
+    classify_avg = 0.0
     def on_message_received(self, topic, payload):
         event = json.loads(payload)
+        current_time = time()
         print("Message received. Payload: '{}".format(event))
 
+        ## TODO: use this for testing empty messages
+        # msg_time_sent = int(event["timestamp"])
+        #
+        # if msg_time_sent != 0:
+        #     time_diff = current_time - msg_time_sent
+        #     self.msg_count += 1
+        #     self.time_total += time_diff
+        #     self.time_average = float(self.time_total / self.msg_count)
+        #     print("Current time: " + str(current_time))
+        #     print("Total Message Count: " + str(self.msg_count))
+        #     print("Time Difference: " + str(time_diff))
+        #     print("Running Time Average: " + str(self.time_average))
+        ###
+
         if event["type"] == "IMAGE":
+            msg_time_sent = int(event["timestamp"])
+
+            if msg_time_sent != 0:
+                time_diff = current_time - msg_time_sent
+                self.msg_count += 1
+                self.time_total += time_diff
+                self.time_average = float(self.time_total / self.msg_count)
+                print("Current time: " + str(current_time))
+                print("Total Message Count: " + str(self.msg_count))
+                print("Time Difference: " + str(time_diff))
+                print("Running Time Average: " + str(self.time_average))
             print("Image received.")
             img_data = event["payload"]
+
             decode_img = base64.b64decode(img_data)
             filename = "test_image.jpeg"
             if self.device_screen is not None:
                 self.device_screen.device.signals.image_received.emit(img_data)
             with open(filename, 'wb') as f:
                 f.write(decode_img)
+
+            ## TESTING CLASSIFICATION TIMING
+            before_time = time()
             result = ClassifyImage("model7-NN-CabPeople-acc90.skops", "test_image.jpeg")
+            after_time = time()
+
+            time_diff = after_time - before_time
+            print("Time elapsed: " + str(time_diff) + " s.")
+
+            self.classify_count += 1
+            self.classify_sum += time_diff
+            self.classify_avg = float(self.classify_sum / self.classify_count)
+
+            print("Count: " + str(self.classify_count))
+            print("Running Average: " + str(self.classify_avg))
+
+            ## END TESTING
+
             if result == IMAGE_HAND:
                 print("Success! Hand Found. Restarting timer.")
                 if self.device_screen is not None:
@@ -494,6 +553,7 @@ class DeviceScreen(QWidget):
 
     def close_button_pressed(self):
         print("close button pressed")
+        close_command["timestamp"] = str(time())
         close_command_json = json.dumps(close_command)
         self.parent.MQTT_connection.publish(topic=esp32_pub_topic,
                                             payload=close_command_json,
