@@ -29,8 +29,6 @@
 #define CLOSE 1
 #define OPEN 0
 
-// const char* ssid = "Fios-P8F8p";
-// const char* password = "need23haw3898wax";
 const char* password = "12345678";
 const char* ssid = "Maddie iPhone 12";
 

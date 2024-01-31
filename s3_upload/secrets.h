@@ -3,8 +3,10 @@
 #define SECRET
 #define THINGNAME "ESP32_Maddie"
 
-const char WIFI_SSID[] = "Fios-P8F8p";
-const char WIFI_PASSWORD[] = "need23haw3898wax";
+const char WIFI_SSID[] = "**";
+const char WIFI_PASSWORD[] = "**";
+// Add wifi name/pw before flashing
+
 const char AWS_IOT_ENDPOINT[] = "a3fn6zbxkxmi7t-ats.iot.us-east-1.amazonaws.com";
 
 
