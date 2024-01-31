@@ -1,0 +1,23 @@
+AWS MQTT Messaging
+
+
+All messages will be broadcasted to the cupboardCloser topic.
+
+All messages will have the format below:
+{
+	type = "",
+	payload = "",
+}
+
+Types are: 
+
+	WIFI_INFO_CHANGE
+	WIFI_CHANGE_RESPONSE
+	WIFI_CHANGE_FAILURE
+	TIMEOUT_CHANGE
+	TIMEOUT_CHANGE_RESPONSE
+	IMAGE
+	IMAGE_RESPONSE
+	HAND_DETECTED
+	DOOR_OPEN
+	CLOSE_DOOR_CMD
